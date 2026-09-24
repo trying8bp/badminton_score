@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Badminton Score Tracker</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1a1d23; --muted: #6b7280;
+    --accent: #16a34a; --accent2: #2563eb; --border: #e5e7eb; --danger:#dc2626;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#101215; --card:#1b1e23; --text:#f2f3f5; --muted:#9aa0aa; --border:#2a2d33;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#101215; --card:#1b1e23; --text:#f2f3f5; --muted:#9aa0aa; --border:#2a2d33;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100%;
+    padding: 16px;
+  }
+  .wrap { max-width: 520px; margin: 0 auto; }
+  .tabs {
+    display:flex; gap:8px; margin-bottom:16px;
+    background: var(--card); border:1px solid var(--border); border-radius:12px; padding:4px;
+  }
+  .tab {
+    flex:1; text-align:center; padding:10px; border-radius:9px; font-weight:600; font-size:14px;
+    cursor:pointer; color: var(--muted);
+  }
+  .tab.active { background: var(--accent2); color:#fff; }
+  .card {
+    background: var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:16px; margin-bottom:14px;
+  }
+  .games-row { display:flex; justify-content:center; gap:10px; margin-bottom:14px; font-size:14px; color:var(--muted); }
+  .games-row b { color: var(--text); }
+  .court {
+    display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:center;
+  }
+  .mid-controls { display:flex; flex-direction:column; gap:8px; }
+  .mid-controls button {
+    padding:12px 10px; font-size:12px; font-weight:700; border-radius:10px; width:92px;
+    line-height:1.25;
+  }
+  .continue-btn { background: var(--accent); color:#fff; }
+  .break-btn { background: var(--danger); color:#fff; }
+  .side {
+    background: var(--bg); border:1px solid var(--border); border-radius:14px;
+    padding:14px; text-align:center; position:relative;
+  }
+  .side.leader { border-color: var(--accent); }
+  .player-row { display:flex; align-items:center; justify-content:center; gap:4px; margin-bottom:3px; }
+  .name-input {
+    width:100%; text-align:center; font-size:15px; font-weight:600; background:transparent;
+    border:none; color:var(--text); outline:none; border-bottom:1px dashed transparent;
+  }
+  .name-input.small { font-size:12.5px; font-weight:500; }
+  .name-input:focus { border-bottom:1px dashed var(--muted); }
+  .serve-dot {
+    display:inline-block; width:12px; height:12px; min-width:12px; border-radius:50%;
+    cursor:pointer; border: 2px solid var(--accent); background: transparent; flex-shrink:0;
+  }
+  .serve-dot.active { background: var(--accent); border-color: var(--accent); }
+  .serve-dot.receiving { background: var(--accent2); border-color: var(--accent2); }
+  .serving-label {
+    font-size:11px; color: var(--accent); font-weight:700; min-height:14px; margin-bottom:4px;
+  }
+  .score {
+    font-size:56px; font-weight:800; line-height:1; margin:8px 0 10px; font-variant-numeric: tabular-nums;
+  }
+  button {
+    border:none; border-radius:10px; cursor:pointer; font-weight:700; font-family:inherit;
+  }
+  .controls { display:flex; gap:10px; justify-content:center; margin-top:14px; flex-wrap:wrap; }
+  .controls button {
+    padding:10px 16px; font-size:13px; background: var(--card); border:1px solid var(--border); color: var(--text);
+  }
+  .controls button.primary { background: var(--accent2); color:#fff; border:none; }
+  .controls button.reset { color: var(--danger); }
+  .banner {
+    text-align:center; padding:14px; border-radius:12px; background: var(--accent); color:#fff;
+    font-weight:700; margin-bottom:14px; font-size:16px;
+  }
+  .history {
+    font-size:13px; color: var(--muted); text-align:center; margin-top:2px;
+  }
+  .legend {
+    display:flex; justify-content:flex-end; gap:14px; font-size:11px; color:var(--muted);
+    margin-top:10px; align-items:center;
+  }
+  .legend-dot {
+    width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:middle;
+  }
+  .legend-dot.serve { background: var(--accent); }
+  .legend-dot.receive { background: var(--accent2); }
+  .section { display:none; }
+  .section.active { display:block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" id="tabSingles">Singles</div>
+    <div class="tab" id="tabDoubles">Doubles</div>
+  </div>
+
+  <!-- SINGLES -->
+  <div class="section active" id="singlesSection">
+    <div id="s-banner"></div>
+    <div class="card">
+      <div class="games-row" id="s-gamesRow"></div>
+      <div class="court">
+        <div class="side" id="s-sideA">
+          <div class="serving-label" id="s-labelA">&nbsp;</div>
+          <div class="player-row">
+            <input class="name-input" id="s-nameA0" maxlength="14" value="Player A">
+            <span id="s-serveA0" class="serve-dot" title="Tap to set as server"></span>
+          </div>
+          <div class="score" id="s-scoreA">0</div>
+        </div>
+        <div class="mid-controls">
+          <button class="continue-btn" id="s-continueBtn">Service<br>Continue</button>
+          <button class="break-btn" id="s-breakBtn">Service<br>Break</button>
+        </div>
+        <div class="side" id="s-sideB">
+          <div class="serving-label" id="s-labelB">&nbsp;</div>
+          <div class="player-row">
+            <input class="name-input" id="s-nameB0" maxlength="14" value="Player B">
+            <span id="s-serveB0" class="serve-dot" title="Tap to set as server"></span>
+          </div>
+          <div class="score" id="s-scoreB">0</div>
+        </div>
+      </div>
+      <div class="history" id="s-historyLine"></div>
+      <div class="legend">
+        <span><span class="legend-dot serve"></span>Serving</span>
+        <span><span class="legend-dot receive"></span>Receiving</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="primary" id="s-newGameBtn">New Game</button>
+      <button id="s-undoBtn">Undo Point</button>
+    </div>
+  </div>
+
+  <!-- DOUBLES -->
+  <div class="section" id="doublesSection">
+    <div id="d-banner"></div>
+    <div class="card">
+      <div class="games-row" id="d-gamesRow"></div>
+      <div class="court">
+        <div class="side" id="d-sideA">
+          <div class="serving-label" id="d-labelA">&nbsp;</div>
+          <div class="player-row">
+            <input class="name-input small" id="d-nameA0" maxlength="12" value="Player A1">
+            <span id="d-serveA0" class="serve-dot" title="Tap to set as first server"></span>
+          </div>
+          <div class="player-row">
+            <input class="name-input small" id="d-nameA1" maxlength="12" value="Player A2">
+            <span id="d-serveA1" class="serve-dot" title="Tap to set as first server"></span>
+          </div>
+          <div class="score" id="d-scoreA">0</div>
+        </div>
+        <div class="mid-controls">
+          <button class="continue-btn" id="d-continueBtn">Service<br>Continue</button>
+          <button class="break-btn" id="d-breakBtn">Service<br>Break</button>
+        </div>
+        <div class="side" id="d-sideB">
+          <div class="serving-label" id="d-labelB">&nbsp;</div>
+          <div class="player-row">
+            <input class="name-input small" id="d-nameB0" maxlength="12" value="Player B1">
+            <span id="d-serveB0" class="serve-dot" title="Tap to set as first server"></span>
+          </div>
+          <div class="player-row">
+            <input class="name-input small" id="d-nameB1" maxlength="12" value="Player B2">
+            <span id="d-serveB1" class="serve-dot" title="Tap to set as first server"></span>
+          </div>
+          <div class="score" id="d-scoreB">0</div>
+        </div>
+      </div>
+      <div class="history" id="d-historyLine"></div>
+      <div class="legend">
+        <span><span class="legend-dot serve"></span>Serving</span>
+        <span><span class="legend-dot receive"></span>Receiving</span>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="primary" id="d-newGameBtn">New Game</button>
+      <button id="d-undoBtn">Undo Point</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function createTracker(cfg){
+    // cfg: prefix, storageKey, doubles(bool), defaultNames{A:[...],B:[...]}
+    var p = cfg.prefix;
+    var doubles = cfg.doubles;
+    function id(name){ return document.getElementById(p + name); }
+
+    var state = {
+      names: cfg.defaultNames,
+      score: { A: 0, B: 0 },
+      gamesWon: { A: 0, B: 0 },
+      gameHistory: [],
+      server: 'A',
+      serverChosen: false,
+      rightIndex: doubles ? { A: 0, B: 0 } : null, // which player index occupies the right court
+      matchStarted: false,
+      pointLog: [],
+      matchOver: false,
+      winner: null
+    };
+
+    function save(){
+      try { localStorage.setItem(cfg.storageKey, JSON.stringify(state)); }
+      catch(e) { /* storage unavailable, continue in-memory */ }
+    }
+    function load(){
+      try {
+        var raw = localStorage.getItem(cfg.storageKey);
+        if (!raw) return;
+        var parsed = JSON.parse(raw);
+        if (!parsed || !parsed.names || !parsed.score) return;
+
+        // migrate older saved formats so stale data never breaks rendering
+        var expectedCount = doubles ? 2 : 1;
+        ['A','B'].forEach(function(side){
+          var n = parsed.names[side];
+          if (typeof n === 'string') n = [n];
+          if (!Array.isArray(n)) n = cfg.defaultNames[side].slice();
+          while (n.length < expectedCount) {
+            n.push(cfg.defaultNames[side][n.length] || ('Player ' + side + (n.length + 1)));
+          }
+          parsed.names[side] = n.slice(0, expectedCount);
+        });
+        if (doubles && (!parsed.rightIndex || typeof parsed.rightIndex.A !== 'number')) {
+          parsed.rightIndex = { A: 0, B: 0 };
+        }
+        if (typeof parsed.serverChosen !== 'boolean') {
+          parsed.serverChosen = !!parsed.matchStarted;
+        }
+        if (!Array.isArray(parsed.pointLog)) parsed.pointLog = [];
+        state = parsed;
+      } catch(e) { /* ignore corrupt data, keep default state */ }
+    }
+
+    function displayName(side){
+      var n = state.names[side];
+      return doubles ? (n[0] + ' & ' + n[1]) : n[0];
+    }
+
+    // which player index on `team` is currently the server, based on score parity
+    function serverPlayerIndex(team){
+      if (!doubles) return 0;
+      var even = state.score[team] % 2 === 0;
+      return even ? state.rightIndex[team] : (1 - state.rightIndex[team]);
+    }
+
+    // which player index on `team` (the non-serving team) is currently receiving
+    function receiverPlayerIndex(receivingTeam){
+      if (!doubles) return 0;
+      var even = state.score[state.server] % 2 === 0;
+      return even ? state.rightIndex[receivingTeam] : (1 - state.rightIndex[receivingTeam]);
+    }
+
+    function isGameWon(sA, sB){
+      if (sA >= 30) return 'A';
+      if (sB >= 30) return 'B';
+      if (sA >= 21 && sA - sB >= 2) return 'A';
+      if (sB >= 21 && sB - sA >= 2) return 'B';
+      return null;
+    }
+
+    function addPoint(side){
+      if (state.matchOver) return;
+      state.matchStarted = true;
+      var wasServer = (state.server === side);
+      state.pointLog.push({
+        side: side,
+        prevServer: state.server,
+        prevRightIndex: doubles ? { A: state.rightIndex.A, B: state.rightIndex.B } : null
+      });
+      state.score[side] += 1;
+      if (doubles && wasServer) {
+        // same player keeps serving, so they swap which court they occupy
+        state.rightIndex[side] = 1 - state.rightIndex[side];
+      }
+      state.server = side;
+
+      var winner = isGameWon(state.score.A, state.score.B);
+      if (winner) {
+        state.gameHistory.push(state.score.A + '-' + state.score.B);
+        state.gamesWon[winner] += 1;
+        state.score = { A: 0, B: 0 };
+        state.pointLog = [];
+        state.server = winner;
+        if (doubles) state.rightIndex = { A: 0, B: 0 }; // reset court positions for new game
+        if (state.gamesWon[winner] >= 2) {
+          state.matchOver = true;
+          state.winner = winner;
+        }
+      }
+      save(); render();
+    }
+
+    function undo(){
+      if (state.matchOver) return;
+      var last = state.pointLog.pop();
+      if (last) {
+        state.score[last.side] = Math.max(0, state.score[last.side] - 1);
+        state.server = last.prevServer;
+        if (doubles && last.prevRightIndex) state.rightIndex = last.prevRightIndex;
+      }
+      if (state.pointLog.length === 0 && state.gamesWon.A === 0 && state.gamesWon.B === 0) {
+        state.matchStarted = false;
+      }
+      save(); render();
+    }
+
+    function newGame(){
+      if (state.matchOver) {
+        // match already finished — start a brand new match, keep the names
+        var names = state.names;
+        state = {
+          names: names,
+          score: { A: 0, B: 0 },
+          gamesWon: { A: 0, B: 0 },
+          gameHistory: [],
+          server: 'A',
+          serverChosen: false,
+          rightIndex: doubles ? { A: 0, B: 0 } : null,
+          matchStarted: false,
+          pointLog: [],
+          matchOver: false,
+          winner: null
+        };
+      } else {
+        state.score = { A: 0, B: 0 };
+        state.pointLog = [];
+        state.matchStarted = false; // unlock serve selection for the new game
+        state.serverChosen = false;
+        if (doubles) state.rightIndex = { A: 0, B: 0 };
+      }
+      save(); render();
+    }
+
+    // singles: tap a side's single dot to set that side as server
+    function setServer(side){
+      if (state.matchOver || state.matchStarted) return;
+      state.server = side;
+      save(); render();
+    }
+
+    // doubles: tap a player's dot to set their starting court position (right-court occupant)
+    // — independent of which team serves. Tap a side's label to make that team serve first.
+    function setRightPosition(side, playerIndex){
+      if (state.matchOver || state.matchStarted) return;
+      state.rightIndex[side] = playerIndex;
+      save(); render();
+    }
+    function setServingTeam(side){
+      if (state.matchOver || state.matchStarted) return;
+      state.server = side;
+      save(); render();
+    }
+
+    function render(){
+      ['A','B'].forEach(function(side){
+        state.names[side].forEach(function(val, i){
+          id('name' + side + i).value = val;
+        });
+      });
+      id('scoreA').textContent = state.score.A;
+      id('scoreB').textContent = state.score.B;
+      id('sideA').classList.toggle('leader', state.score.A > state.score.B);
+      id('sideB').classList.toggle('leader', state.score.B > state.score.A);
+
+      var locked = state.matchStarted || state.matchOver;
+
+      if (doubles) {
+        var activeIdx = { A: serverPlayerIndex('A'), B: serverPlayerIndex('B') };
+        var receivingSide = state.server === 'A' ? 'B' : 'A';
+        var receiverIdx = receiverPlayerIndex(receivingSide);
+        ['A','B'].forEach(function(side){
+          for (var i = 0; i < 2; i++) {
+            var dot = id('serve' + side + i);
+            var isServingDot = locked && side === state.server && activeIdx[side] === i;
+            var isReceivingDot = locked && side === receivingSide && receiverIdx === i;
+            var preMatchServerPick = !locked && side === state.server && state.rightIndex[side] === i;
+            var preMatchReceiverPick = !locked && side !== state.server && state.rightIndex[side] === i;
+            dot.classList.toggle('active', isServingDot || preMatchServerPick);
+            dot.classList.toggle('receiving', isReceivingDot || preMatchReceiverPick);
+            dot.style.cursor = locked ? 'default' : 'pointer';
+            dot.title = locked
+              ? (isServingDot ? 'Currently serving' : isReceivingDot ? 'Currently receiving' : '')
+              : (side === state.server ? 'Tap to set as first server' : 'Tap to set as first receiver');
+          }
+          var label = id('label' + side);
+          label.style.cursor = locked ? 'default' : 'pointer';
+          if (locked && side === state.server) {
+            label.innerHTML = '<span style="color:var(--accent)">&#9679; Serving: ' + state.names[side][activeIdx[side]] + '</span>';
+          } else if (locked && side === receivingSide) {
+            label.innerHTML = '<span style="color:var(--accent2)">&#9679; Receiving: ' + state.names[side][receiverIdx] + '</span>';
+          } else if (side === state.server) {
+            label.innerHTML = '<span style="color:var(--accent)">&#10003; Serves first</span>';
+          } else {
+            label.innerHTML = '<span style="color:var(--muted)">Tap to serve first</span>';
+          }
+        });
+      } else {
+        ['A','B'].forEach(function(side){
+          var dot = id('serve' + side + '0');
+          dot.classList.toggle('active', state.server === side);
+          dot.classList.toggle('receiving', locked && state.server !== side);
+          dot.style.cursor = locked ? 'default' : 'pointer';
+          dot.title = locked ? (state.server === side ? 'Currently serving' : 'Currently receiving') : 'Tap to set as server';
+          var label = id('label' + side);
+          if (locked && state.server === side) {
+            label.innerHTML = '<span style="color:var(--accent)">&#9679; Serving</span>';
+          } else if (locked) {
+            label.innerHTML = '<span style="color:var(--accent2)">&#9679; Receiving</span>';
+          } else {
+            label.innerHTML = '&nbsp;';
+          }
+        });
+      }
+
+      id('gamesRow').innerHTML =
+        '<span><b>' + displayName('A') + '</b>: ' + state.gamesWon.A + ' games</span>' +
+        '<span>·</span>' +
+        '<span><b>' + displayName('B') + '</b>: ' + state.gamesWon.B + ' games</span>';
+
+      id('historyLine').textContent = state.gameHistory.length
+        ? 'Completed: ' + state.gameHistory.join('  |  ')
+        : 'Best of 3 · first to 21, win by 2 (cap 30)';
+
+      var banner = id('banner');
+      banner.innerHTML = state.matchOver
+        ? '<div class="banner">🏆 ' + displayName(state.winner) + ' wins the match!</div>'
+        : '';
+    }
+
+    id('continueBtn').addEventListener('click', function(){ addPoint(state.server); });
+    id('breakBtn').addEventListener('click', function(){
+      addPoint(state.server === 'A' ? 'B' : 'A');
+    });
+    id('undoBtn').addEventListener('click', undo);
+    var newGameBtn = id('newGameBtn');
+    var confirmArmed = false, confirmTimer = null;
+    newGameBtn.addEventListener('click', function(){
+      if (!confirmArmed) {
+        confirmArmed = true;
+        newGameBtn.textContent = 'Tap again to confirm';
+        clearTimeout(confirmTimer);
+        confirmTimer = setTimeout(function(){
+          confirmArmed = false;
+          newGameBtn.textContent = 'New Game';
+        }, 3000);
+        return;
+      }
+      confirmArmed = false;
+      clearTimeout(confirmTimer);
+      newGameBtn.textContent = 'New Game';
+      newGame();
+    });
+
+    if (doubles) {
+      ['A','B'].forEach(function(side){
+        for (var i = 0; i < 2; i++) {
+          (function(side, i){
+            id('serve' + side + i).addEventListener('click', function(){ setRightPosition(side, i); });
+          })(side, i);
+        }
+        id('label' + side).addEventListener('click', function(){ setServingTeam(side); });
+      });
+    } else {
+      id('serveA0').addEventListener('click', function(){ setServer('A'); });
+      id('serveB0').addEventListener('click', function(){ setServer('B'); });
+    }
+
+    ['A','B'].forEach(function(side){
+      state.names[side].forEach(function(val, i){
+        id('name' + side + i).addEventListener('input', function(e){
+          state.names[side][i] = e.target.value || (doubles ? ('Player ' + side + (i+1)) : ('Player ' + side));
+          save();
+        });
+      });
+    });
+
+    load();
+    render();
+  }
+
+  createTracker({
+    prefix: 's-',
+    storageKey: 'badminton_singles_state_v1',
+    doubles: false,
+    defaultNames: { A: ['Player A'], B: ['Player B'] }
+  });
+
+  createTracker({
+    prefix: 'd-',
+    storageKey: 'badminton_doubles_state_v1',
+    doubles: true,
+    defaultNames: { A: ['Player A1', 'Player A2'], B: ['Player B1', 'Player B2'] }
+  });
+
+  document.getElementById('tabSingles').addEventListener('click', function(){
+    document.getElementById('tabSingles').classList.add('active');
+    document.getElementById('tabDoubles').classList.remove('active');
+    document.getElementById('singlesSection').classList.add('active');
+    document.getElementById('doublesSection').classList.remove('active');
+  });
+  document.getElementById('tabDoubles').addEventListener('click', function(){
+    document.getElementById('tabDoubles').classList.add('active');
+    document.getElementById('tabSingles').classList.remove('active');
+    document.getElementById('doublesSection').classList.add('active');
+    document.getElementById('singlesSection').classList.remove('active');
+  });
+})();
+</script>
+</body>
+</html>
